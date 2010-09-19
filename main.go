@@ -19,6 +19,7 @@ import (
 var configPath string
 var config *botConfig
 var helpList string
+var bot *ircbot.Bot
 
 func init() {
 	flag.StringVar(&configPath, "c", os.Args[0] + ".conf", "config file to use, defaults to <executable name>.conf")
@@ -38,7 +39,7 @@ func main() {
 
 func session() {
 	defer ircbot.RecoverWithTrace()
-	bot := ircbot.NewBot(config.BotName, config.AttnChar)
+	bot = ircbot.NewBot(config.BotName, config.AttnChar)
 
 	bot.Actions["INVITE"] = join
 	bot.SetPrivmsgHandler(parseCommand, parseChat)
@@ -78,6 +79,14 @@ func parseCommand(c string, m *ircbot.Message) string {
 	case "version" : return config.Version
 	case "seen" : return seen(args, m)
 	case "source", config.BotName : return config.SourceLoc
+	case "reparse" :
+		if config.Trusted[m.GetSender()] {
+			if reparseConfig(bot) {
+				return "Reparsed " + configPath + "successfully."
+			} else {
+				return "Failed to reparse " + configPath + "."
+			}
+		}
 	}
 
 	return "Huh?"
@@ -101,18 +110,20 @@ func recordSighting(m *ircbot.Message) {
 	s[m.Args[0]] = &sighting{time.LocalTime(), m.Trailing}
 }
 
-var urlRegex *regexp.Regexp = regexp.MustCompile("http://[^ ]+")
+var urlRegex *regexp.Regexp = regexp.MustCompile(`http://([a-zA-Z0-9_\-.]+)+(:[0-9]+)?[^ ]*`)
 
 func parseChat(msg string, m *ircbot.Message) (reply string) {
-	if matches := urlRegex.FindAllString(msg, -1); matches != nil {
-		for _, url := range matches {
+	if matches := urlRegex.FindAllStringSubmatch(msg, -1); matches != nil {
+		for _, m := range matches {
 			
-			response, _, err := http.Get(url)
+			response, finalURL, err := http.Get(m[0])
 			
 			if err != nil {
-				log.Stderrf("[E] %s - Fetch failed: %s\n", url, err.String())
-			} else if t := getTitle(response.Body); t != "" {
-				reply += fmt.Sprintf("Title:%s\n", t)
+				log.Stderrf("[E] %s - Fetch failed: %s\n", m[0], err.String())
+			} else if finalURL != m[0] || config.TitleWhitelist[m[1]] {
+				if t := getTitle(response.Body); t != "" {
+					reply += fmt.Sprintf("Title:%s\n", t)
+				}
 			}
 		}
 	}

@@ -23,6 +23,7 @@ type botConfig struct {
 
 	Help map[string]string
 	Trusted map[string]bool
+	TitleWhitelist map[string]bool
 }
 
 func parseConfig(filename string) (*botConfig, os.Error){
