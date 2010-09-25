@@ -73,6 +73,7 @@ func parseCommand(c string, m *ircbot.Message) string {
 	recordSighting(m)
 
 	switch command {
+	case "" : return ""
 	case "help" : return help(args)
 	case "cal", "calendar" : return getCal(args)
 	case "dict", "define" : return dictLookup(args)
@@ -82,7 +83,7 @@ func parseCommand(c string, m *ircbot.Message) string {
 	case "reparse" :
 		if config.Trusted[m.GetSender()] {
 			if reparseConfig(bot) {
-				return "Reparsed " + configPath + "successfully."
+				return "Reparsed " + configPath + " successfully."
 			} else {
 				return "Failed to reparse " + configPath + "."
 			}
@@ -113,6 +114,10 @@ func recordSighting(m *ircbot.Message) {
 var urlRegex *regexp.Regexp = regexp.MustCompile(`http://([a-zA-Z0-9_\-.]+)+(:[0-9]+)?[^ ]*`)
 
 func parseChat(msg string, m *ircbot.Message) (reply string) {
+	if config.Ignores[m.GetSender()] {
+		return ""
+	}
+
 	if matches := urlRegex.FindAllStringSubmatch(msg, -1); matches != nil {
 		for _, m := range matches {
 			

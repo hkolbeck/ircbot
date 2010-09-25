@@ -8,7 +8,7 @@ build: clean ircbot comp
 
 test: clean ircbot comp
 	$(GV)l -o $(TEST) main.$(GV)
-	pkill -9 $(TEST)
+	-pkill -9 $(TEST)
 	./$(TEST)
 
 ircbot:

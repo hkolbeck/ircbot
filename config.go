@@ -24,6 +24,7 @@ type botConfig struct {
 	Help map[string]string
 	Trusted map[string]bool
 	TitleWhitelist map[string]bool
+	Ignores map[string]bool
 }
 
 func parseConfig(filename string) (*botConfig, os.Error){
@@ -50,7 +51,7 @@ func initParseConfig() {
 	config, err = parseConfig(configPath)
 
 	if err != nil {
-		log.Stderr("[E] Failed to parse config file, exiting")
+		log.Stderrf("[E] Failed to parse config file: %s\n --exiting--", err.String())
 		os.Exit(1)
 	}
 
