@@ -73,21 +73,16 @@ func parseCommand(c string, m *ircbot.Message) string {
 	recordSighting(m)
 
 	switch command {
-	case "" : return ""
 	case "help" : return help(args)
 	case "cal", "calendar" : return getCal(args)
 	case "dict", "define" : return dictLookup(args)
 	case "version" : return config.Version
 	case "seen" : return seen(args, m)
 	case "source", config.BotName : return config.SourceLoc
-	case "reparse" :
-		if config.Trusted[m.GetSender()] {
-			if reparseConfig(bot) {
-				return "Reparsed " + configPath + " successfully."
-			} else {
-				return "Failed to reparse " + configPath + "."
-			}
-		}
+	case "spam" : return spam(c, m)
+	case "ignore" : return ignore(args, m)
+	case "reconf" : return reconf(m)
+	case "" : return ""
 	}
 
 	return "Huh?"
@@ -109,6 +104,62 @@ func recordSighting(m *ircbot.Message) {
 	}
 
 	s[m.Args[0]] = &sighting{time.LocalTime(), m.Trailing}
+}
+
+func spam(c string, m *ircbot.Message) string {
+	msgStart := strings.Index(c, ":")
+	if msgStart == -1 {
+		return "No message specified, try `?spam <recipients> :<message>`"
+	}
+
+	msg := strings.TrimSpace(c[msgStart + 1:])
+
+	if len(msg) == 0 {
+		return "Empty message not sent"
+	}
+
+	recipients := strings.Split(c[:msgStart], " ", -1)[1:]
+
+	if len(recipients) == 0 {
+		return "No recipients specified, try `?spam <recipients> :<message>`"
+	}
+
+	for _, r := range recipients {
+		_ = bot.Send(config.Server, &ircbot.Message{
+		Command : "PRIVMSG",
+		Trailing : fmt.Sprintf("%s sez: %s",  m.GetSender(), msg),
+		Args : []string{r},
+		})
+	}
+
+	return "Ok, " + m.GetSender()
+}
+
+func ignore(args []string, m *ircbot.Message) string {
+	if config.Trusted[m.GetSender()] {
+		for _, u := range args {
+			if u[0] == '-' {
+				config.Ignores[u[1:]] = false, false
+			} else if u[0] == '+' {
+				config.Ignores[u[1:]] = true
+			} else {
+				config.Ignores[u] = true
+			}
+		}
+		return "Ok, " + m.GetSender()
+	}
+	return "I'm afraid I can't do that " + m.GetSender()
+}
+
+func reconf(m *ircbot.Message) string {
+	if config.Trusted[m.GetSender()] {
+		if reparseConfig(bot) {
+			return "Reparsed " + configPath + " successfully."
+		} else {
+			return "Failed to reparse " + configPath + "."
+		}
+	}
+	return "I'm afraid I can't do that " + m.GetSender()
 }
 
 var urlRegex *regexp.Regexp = regexp.MustCompile(`http://([a-zA-Z0-9_\-.]+)+(:[0-9]+)?[^ ]*`)
