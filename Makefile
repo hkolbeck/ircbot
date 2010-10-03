@@ -18,4 +18,4 @@ comp:
 	$(GV)g main.go config.go xmlstructs.go
 
 clean:
-	-rm *.$(GV) *~ $(TEST) $(EXE) 2> /dev/null 
+	-rm *.$(GV) *~  2> /dev/null 
