@@ -1,1 +1,1 @@
-To install, be sure that $GOROOT, $GOOS, and $GOARCH are all set as described at http://golang.org/doc/install.html#environment, and that the directory $GOROOT/pkg/$GOOS_$GOARCH/ exists, then run `make install`
+To install, run `make` then `make install`.  The second may require admin priviliges depending on the location of the Go source tree.
