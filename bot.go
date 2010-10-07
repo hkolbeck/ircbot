@@ -238,8 +238,6 @@ func (this *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string)
 		
 		var query, reply, target string
 		
-		
-
 		if msg.Args[0] == this.Nick { //Private message
 			target = msg.GetSender()
 			query = msg.Trailing[0:]
@@ -258,7 +256,6 @@ func (this *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string)
 		} else {
 			return nil
 		}
-
 
 		if reply == "" {
 			return nil
