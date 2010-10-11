@@ -46,6 +46,7 @@ func sayHi(cmd string, msg *irc.Message) string {
 	return "Hi there, " + msg.GetSender()
 }
 
+//Function to join any channels the bot is invited to.
 func join(bot *irc.Bot, msg *irc.Message) *irc.Message {
 	return &irc.Message{
 		Command : "JOIN",
