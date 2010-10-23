@@ -6,18 +6,21 @@
 
 package ircbot
 
-import "net"
-import "bufio"
-import "os"
-import "fmt"
-import "log"
-import "time"
-import "bytes"
+import (
+	"net"
+	"bufio"
+	"os"
+	"fmt"
+	"time"
+	"bytes"
+)
 
-var strError = []byte("ERROR")
-var strPing = []byte("PING")
-var strPong = []byte("PONG")
-var strNewline = byte('\n')
+var (
+	strError = []byte("ERROR")
+	strPing = []byte("PING")
+	strPong = []byte("PONG")
+	strNewline = byte('\n')
+)
 
 type Config struct {
 	Address        string
@@ -85,7 +88,7 @@ func (this *Network) Close() {
 		err := this.tcp.Close()
 		this.tcp = nil
 		if err != nil {
-			log.Stderrf("E: %s\n", err)
+			errors.Printf("E: %s\n", err)
 		}
 	}
 }
@@ -106,14 +109,14 @@ func (this *Network) outputLoop() {
 		data := msg.Encode()
 		
 		if num, err := this.writer.Write(data); num < len(data) {
-			log.Stderrf("[e] %s\n", err)
+			errors.Printf("[e] %s\n", err)
 			break
 		}
 		
 		if this.verbose {
 			// no use in spamming our logs with ping/pong
 			if msg.Command != "PONG" {
-				log.Stdoutf("[<] %s", data)
+				info.Printf("[<] %s", data)
 			}
 		}
 		this.writer.Flush()
@@ -134,8 +137,6 @@ func (this *Network) inputLoop() {
 	Args : []string{this.config.NickName},
 	}
 
-
-
 	var err os.Error
 	var data []byte
 
@@ -146,7 +147,7 @@ func (this *Network) inputLoop() {
 
 		if data, err = this.reader.ReadBytes(strNewline); err != nil {
 			if err != os.EOF {
-				log.Stderrf("[E] %s\n", err)
+				errors.Printf("[E] %s\n", err)
 			}
 			return
 		}
@@ -154,7 +155,7 @@ func (this *Network) inputLoop() {
 		data = data[0 : len(data)-1]
 
 		if bytes.HasPrefix(data, strError) {
-			log.Stderrf("[E] %s\n", data[7:len(data)])
+			errors.Printf("[E] %s\n", data[7:len(data)])
 			this.Close()
 			return
 		}
@@ -163,7 +164,7 @@ func (this *Network) inputLoop() {
 			if this.verbose {
 				//don't spam our logs with ping/pong data.
 				if !bytes.HasPrefix(data, strPing){
-					log.Stdoutf("[>] %s", data)
+					info.Printf("[>] %s", data)
 				}
 			}
 			this.In <- Decode(data)

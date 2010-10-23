@@ -16,6 +16,13 @@ import (
 	"runtime"
 )
 
+var (
+	info *log.Logger = log.New(os.Stdout, "[I]", log.Ldate | log.Ltime)
+	errors *log.Logger = log.New(os.Stdout, "[E]", log.Ldate | log.Ltime)
+	lastList chan string = make(chan string, 1)
+	listReq bool
+)
+
 type Bot struct {
 	Nick string
 	Actions map[string]func(*Bot, *Message) *Message
@@ -122,7 +129,7 @@ func (this *Bot) Connect(server string, port int, joinChans []string) (joined in
 
 	//Join specified channels
 	for _, chn := range joinChans {
-		log.Stdoutf("[I] Attempting to join: %s\n", chn)
+		info.Printf("[I] Attempting to join: %s\n", chn)
 		ntwrk.Out <- &Message{
 		Command : "JOIN",
 		Args : []string{chn},
@@ -164,7 +171,7 @@ func (this *Bot) run(ntwrk *Network)  {
 				//Don't report an error if there's no room for a trailing segment, some
 				//messages don't require one.  We handle a 0 case further down.
 				if maxTrailing < 0 {
-					log.Stderrf("[E] Preamble longer than 512 chars, message not sent: %v", msg)
+					errors.Printf("[E] Preamble longer than 512 chars, message not sent: %v", msg)
 					return
 				}
 				
@@ -175,7 +182,7 @@ func (this *Bot) run(ntwrk *Network)  {
 				
 					//Theres a message to be sent, but no room to send it, report error
 					if maxTrailing == 0 && len(reply.Trailing) > 0{
-						log.Stderrf("[E] Preamble leaves no room for message, message not sent: %v", msg)
+						errors.Printf("[E] Preamble leaves no room for message, message not sent: %v", msg)
 						return
 					}
 
@@ -190,7 +197,7 @@ func (this *Bot) run(ntwrk *Network)  {
 									e = lastBreak + s
 								}
 								
-								log.Stdoutf("[I] len(m): %v s: %v e: %v", len(m), s, e)
+								info.Printf("[I] len(m): %v s: %v e: %v", len(m), s, e)
 								ntwrk.Out <- &Message{reply.Prefix, reply.Command, reply.Args, m[s:e]}
 								s = e
 								e = min(e + maxTrailing, len(m))
@@ -291,7 +298,7 @@ func doNothing(bot *Bot, msg *Message) *Message {
 
 func RecoverWithTrace() {
 	if x := recover(); x != nil {
-		log.Stderrf("[EEE] Runtime Panic caught: %v\n", x)
+		errors.Printf("[***] Runtime Panic caught: %v\n", x)
 		
 		var btSync sync.Mutex
 		btSync.Lock()
@@ -308,7 +315,7 @@ func RecoverWithTrace() {
 			}
 			
 			f := runtime.FuncForPC(pc)
-			log.Stderrf("[EEE]---> %d(%s): %s:%d\n", i-1, f.Name(), file, line)
+			errors.Printf("[***]---> %d(%s): %s:%d\n", i-1, f.Name(), file, line)
 			i++
 		}
 		
