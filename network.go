@@ -9,8 +9,9 @@ package ircbot
 import (
 	"bufio"
 	"net"
-	"crypto/tls"
 	"os"
+	"runtime"
+	"crypto/tls"
 )
 
 const (
@@ -56,18 +57,31 @@ func Dial(addr string, port int, nick, pass, domain string, ssl bool) (*Network,
 	return network, err
 }
 
-func dial(addr string, port int, nick, domain string, ssl bool) (*Network, os.Error) {
+func dial(server string, port int, nick, domain string, ssl bool) (*Network, os.Error) {
 	var conn net.Conn
 	var err os.Error
-
-	if conn, err = net.Dial("tcp", addr + string(port)); err != nil {
-		//TODO: Log error
-		return nil, err
+	var resp []byte
+	
+	addr, err := net.ResolveTCPAddr("tcp", server + string(port))
+	if err != nil {
+		goto Error
 	}
 	
+	if conn, err = net.DialTCP("tcp", nil, addr); err != nil {
+		goto Error
+	}
+
 	if ssl {
 		conn = tls.Client(conn, nil) //Let's try a nil config..
 	}
+
+	if err = conn.SetKeepAlive(true); err != nil {
+		goto Error
+	}
+
+	if err = conn.SetReadTimeout(ReadTimeout); err != nil {
+		goto Error
+	}	
 	
 	network := &Network{conn, bufio.NewReadWriter(conn, conn), false, make(<-chan *Message, RW_BUFF), make(chan<- *Message, RW_BUFF)}
 
@@ -75,18 +89,19 @@ func dial(addr string, port int, nick, domain string, ssl bool) (*Network, os.Er
 	network.io.WriteString("NICK " + nick + "\n\r")
 
 	//Check for connection/nick errors - this will consume first line of motd if no error occurs
-	if resp, _, err := network.io.ReadLine(); err == nil && regexp.Match(`[^ \n\r]+ 4[0-9][0-9]`, resp) {
+	if resp, _, err = network.io.ReadLine(); err == nil && regexp.Match(`[^ \n\r]+ 4[0-9][0-9]`, resp) {
 		//Nick already taken, try a ghost kill
 		network.io.WriteString(fmt.Sprintf("PRIVMSG %s :ghost %s %s\n\r", nickserv, nick, pass)
-		if resp, err := network.io.ReadString(); err == nil && strings.Index(resp, `killed`) != -1 {
+		if resp, err = network.io.ReadString(); err == nil && strings.Index(resp, `killed`) != -1 {
 			//Looks like it worked, try again
 			network.io.WriteString("NICK " + nick + "\n\r")
 			//Need another check here?
 		} else {
-			return nil, os.NewError(string(resp))
+			err = os.NewError(string(resp))
+			goto Error
 		}
 	} else if err != nil {
-		return nil, err
+		goto Error
 	}
 	
 	//Consume motd
@@ -102,37 +117,58 @@ func dial(addr string, port int, nick, domain string, ssl bool) (*Network, os.Er
 	
 	go network.listen()
 	go network.speak()
-	go keepAlive()
+	go network.keepAlive()
 		
 	return network, nil
+	
+Error:
+	//TODO: Log error
+	return nil, err
 }
 
 func (self *Network) keepAlive() {
 	tick := time.NewTicker(KeepAliveInterval)
 	defer tick.Stop()
 		
-	for network.connected {
+	for {
 		<-tick.C
-		network.Out <- &Message{
+		self.Out <- &Message{
 			Command : "PING",
 			Args : []string{nick}
 		}
 		timeout := time.After(interval + 5e9)
 		select {
-			<-timeout: network.disconnect <- 1 
-			<-network.keepalive: continue
+			<-timeout: self.disconnect <- 1 
+			<-self.keepalive: continue
 		}
 	}
 }
 
-
 func (self *Network) listen() {
+	for {
+		msg, _, err := self.io.ReadLine()
+		if err != nil {
+			//TODO: Log failure
+			//During disconnection, this could spin, make sure reconnect runs
+			runtime.GoSched() 
+			continue
+		}
+		self.In <- Decode(msg)
+	}
 }
 
 func (self *Network) speak() {
-	defer func() {
-		self.connected = false
-		self.conn.Close()
-	}()
+	for {
+		msg := Encode(<-self.Out)
+		err, _ := self.io.Write(msg)
+		
+		//If write fails, keep trying
+		for err != nil {
+			//During disconnection, this could spin, make sure reconnect runs
+			runtime.GoSched()
+			err, _ := self.io.Write(msg)		
+		}
+		
+	}
 }
 
