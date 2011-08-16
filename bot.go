@@ -16,13 +16,6 @@ import (
 	"runtime"
 )
 
-var (
-	info *log.Logger = log.New(os.Stdout, "[I]", log.Ldate | log.Ltime)
-	errors *log.Logger = log.New(os.Stdout, "[E]", log.Ldate | log.Ltime)
-	lastList chan string = make(chan string, 1)
-	listReq bool
-)
-
 type Bot struct {
 	Nick string
 	Actions map[string]func(*Bot, *Message) *Message
@@ -37,6 +30,7 @@ func NewBot(nick string, prefix byte) (bot *Bot) {
 	actions := map[string]func(*Bot, *Message) *Message {
 		"PING" : pong,
 		"JOIN" : join,
+		"PONG" : resetTimeout,
 		"PASS" : doNothing,
 		"NICK" : doNothing,
 		"USER" : doNothing,
@@ -69,7 +63,6 @@ func NewBot(nick string, prefix byte) (bot *Bot) {
 		"WHOIS" : doNothing,
 		"WHOWAS" : doNothing,
 		"KILL" : doNothing,
-		"PONG" : doNothing,
 		"ERROR" : doNothing,
 		"AWAY" : doNothing,
 		"REHASH" : doNothing,
@@ -83,7 +76,8 @@ func NewBot(nick string, prefix byte) (bot *Bot) {
 	}
 
 	return &Bot{Nick : nick, Prefix : prefix, Actions : actions, networks : make(map[string]*Network, 10)}
-}  
+}
+
 func join(bot *Bot, msg *Message) *Message {
 	bot.myPrefix = msg.Prefix 
 	return nil
@@ -244,7 +238,7 @@ func (this *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string)
 	//Create a regex to match in-channel messages of the form 'botnick: blah'
 	//Match the bot's nick, followed by any char not legal in an irc nick, possibly followed by some number of spaces or tabs.
 	//Legal chars are, without the escapes below: a-zA-Z0-9[]{}\|^`-_
-	regex := regexp.MustCompile(fmt.Sprintf("^%s[^a-zA-Z0-9\\[\\]{}\\\\\\|\\^`\\-_][ \t]*", this.Nick))
+	regex := regexp.MustCompile(fmt.Sprintf(`^%s[^a-zA-Z0-9\[\]{}\\\|\^\-_][ \t` + "`]*", this.Nick))
 	
 	this.Actions["PRIVMSG"] =
 		func(bot *Bot, msg *Message) *Message {
@@ -263,7 +257,7 @@ func (this *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string)
 			target = msg.Args[0]
 			query = msg.Trailing[match[1]:]
 			reply = handler(query, msg)
-		} else if other != nil {
+		} else if other != nil { //Message not directed at bot.
 			target = msg.Args[0]
 			reply = other(msg.Trailing, msg)
 		} else {

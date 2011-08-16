@@ -8,6 +8,9 @@ package main
 
 import irc "cbeck/ircbot"
 
+//Implement a very simple bot which will respond to anyone addressing it and join
+//any channels it is invited to.
+
 func main() {
 	//Create a new bot, setting the bot's desired name, and the
 	//char irc users will prepend to their messages to get the bot's attention
@@ -23,7 +26,7 @@ func main() {
 	//It accepts two functions, the first arguemnt will be called for messages directed
 	//to the bot via its attention char, addressing it by name, or by sending it a 
 	//private message.
-	//The second will be called for all other messages
+	//The second will be called for all other messages in 
 	bot.SetPrivmsgHandler(sayHi, nil)
 
 
