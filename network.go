@@ -21,7 +21,7 @@ import (
 const (
 	//Times in nanoseconds
 	ReconnectDelay = 5e9
-	KeepAliveInterval = 10e9
+	KeepAliveInterval = 12e9
 	PingTimeout = 5e9
 	ReadTimeout = 5e9
 	
@@ -71,35 +71,31 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	var tcpConn *net.TCPConn
 	var conn net.Conn
 	var err os.Error
-	errSrc := ""
 	var resp []byte
 	var network *Network
 
 	errRegex, _ := regexp.Compile(`[^ \n\r]+ 4[0-9][0-9]`)
+	motdRegex, _ := regexp.Compile(`[^ \n\r]+ 376`)
 
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%v", server, port))
 	if err != nil {
-		errSrc = "Resolve"
 		goto Error
 	}
 	
 	if tcpConn, err = net.DialTCP("tcp", nil, addr); err != nil {
-		errSrc = "Dial"
 		goto Error
 	}
 
 	if err = tcpConn.SetKeepAlive(true); err != nil {
-		errSrc = "KeepAlive"
 		goto Error
 	}
 
 	if err = tcpConn.SetReadTimeout(ReadTimeout); err != nil {
-		errSrc = "ReadTimeout"
 		goto Error
 	}	
 
 	if ssl {
-		conn = tls.Client(tcpConn, nil) //Let's try a nil config..
+		conn = tls.Client(tcpConn, nil) //nil config should work for all cases
 	} else {
 		conn = tcpConn
 	}
@@ -114,18 +110,19 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	running : true,
 	}
 
-	network.conn.Write([]byte(fmt.Sprintf("USER %s %s %s :%s\n", nick, domain, addr, nick)))
-	network.conn.Write([]byte("NICK " + nick + "\n"))
+	network.conn.Write([]byte(fmt.Sprintf("USER %s %s %s :%s\n\r", nick, domain, addr, nick)))
+	network.conn.Write([]byte("NICK " + nick + "\n\r"))
 		
 	resp, _, err = network.connIn.ReadLine()
 	for err != nil {
+		fmt.Println("[r1] ", err)
 		netErr := err.(net.Error)
 		if !netErr.Temporary() {
-			errSrc = "InitRead"
 			goto Error
 		}
 		resp, _, err = network.connIn.ReadLine()
 	}
+	fmt.Println("[r2] " + string(resp))
 
 	//Check for connection/nick errors - this will consume first line of motd if no error occurs
 	if errRegex.Match(resp) {
@@ -139,14 +136,20 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 			//Need another check here?
 		} else {
 			err = os.NewError(string(resp))
-			errSrc = "Ghost"
 			goto Error
 		}
 	}
 	
+	//Mark ourselves as a bot - b vs B depends on server
+	network.conn.Write([]byte("MODE " + nick + " +B\n"))
+	network.conn.Write([]byte("MODE " + nick + " +b\n"))
+
 	//Consume motd
-	for network.connIn.Buffered() > 0 {
-		network.connIn.ReadLine()
+	for {
+		line, _, e := network.connIn.ReadLine()
+		if e == nil && motdRegex.Match(line) {
+			break
+		} 
 	}
 	
 	if pass != "" {
@@ -162,8 +165,7 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	return network, nil
 	
 Error:
-	//TODO: Log error
-	return nil, os.NewError(errSrc + ": " + err.String())
+	return nil, err
 }
 
 func (self *Network) HangUp() {
@@ -192,11 +194,13 @@ func (self *Network) listen() {
 	for self.running {
 		msg, _, err := self.connIn.ReadLine()
 		if err != nil {
+			fmt.Println("[l] ", err)
 			//TODO: Log failure
 			//During disconnection, this could spin, make sure reconnect runs
 			runtime.Gosched() 
 			continue
 		}
+		fmt.Println("[>] " + string(msg))
 		self.In <- Decode(msg)
 	}
 }
@@ -213,7 +217,7 @@ func (self *Network) speak() {
 			runtime.Gosched()
 			_, err = self.conn.Write(msg.Encode())		
 		}
-		
+		fmt.Println("[<] " + string(msg.Encode()))		
 	}
 }
 
