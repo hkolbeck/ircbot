@@ -6,15 +6,30 @@
 
 package main
 
-import irc "cbeck/ircbot"
+import (
+	irc "cbeck/ircbot"
+	"fmt"
+)
 
 //Implement a very simple bot which will respond to anyone addressing it and join
 //any channels it is invited to.
 
 func main() {
-	//Create a new bot, setting the bot's desired name, and the
-	//char irc users will prepend to their messages to get the bot's attention
-	bot := irc.NewBot("example-bot", '!') 
+	//Create a new bot
+	bot, err := irc.NewBot(
+		"goirc-bot", //The bot's nick
+		"", //The bot's nickserv password (blank for none)
+		"www.github.com",  //The bot's domain
+		"chat.freenode.org", //IRC server to connect to
+		7070, //Remote port to connect on
+		true, //Use ssl?
+		'!', //Char used to address the bot
+	) 
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	//Control how the bot will react to various IRC commands using the bot's
 	//Actions map.  By default the only thing the bot will do is respond to PING
@@ -32,11 +47,8 @@ func main() {
 
 	//Connect to the server on the given port, and join any channels specified
 	//Returns the number of channels joined (which we're ignoring) and an error if any
-	_, e := bot.Connect("chat.freenode.org", 6667, []string{"#chat", "#privchannel chankey"})
+	bot.JoinChannel("#echo", "")
 
-	if e != nil {
-		panic(e.String())
-	}
 
 	//No further work to be done in main, block indefinitely
 	select {}
