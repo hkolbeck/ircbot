@@ -31,7 +31,7 @@ const (
 
 type Network struct {
 	conn net.Conn  //Connection to the irc server 
-	io *bufio.ReadWriter //Wraps conn's Read/Write operations
+	connIn *bufio.Reader //Wraps conn's Read/Write operations
 	In chan *Message //Channel containing messages the bot recieves
 	Out chan *Message //Channel containing messages to be sent
 	disconnect chan int64 //Internal channel to signal a keepalive failure
@@ -71,36 +71,42 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	var tcpConn *net.TCPConn
 	var conn net.Conn
 	var err os.Error
+	errSrc := ""
 	var resp []byte
 	var network *Network
+
 	errRegex, _ := regexp.Compile(`[^ \n\r]+ 4[0-9][0-9]`)
 
-	addr, err := net.ResolveTCPAddr("tcp", server + string(port))
+	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%v", server, port))
 	if err != nil {
+		errSrc = "Resolve"
 		goto Error
 	}
 	
 	if tcpConn, err = net.DialTCP("tcp", nil, addr); err != nil {
+		errSrc = "Dial"
 		goto Error
 	}
 
 	if err = tcpConn.SetKeepAlive(true); err != nil {
+		errSrc = "KeepAlive"
 		goto Error
 	}
 
 	if err = tcpConn.SetReadTimeout(ReadTimeout); err != nil {
+		errSrc = "ReadTimeout"
 		goto Error
 	}	
 
 	if ssl {
-		conn = tls.Client(conn, nil) //Let's try a nil config..
+		conn = tls.Client(tcpConn, nil) //Let's try a nil config..
 	} else {
 		conn = tcpConn
 	}
 	
 	network = &Network{
 	conn : conn, 
-	io : bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)), 
+	connIn : bufio.NewReader(conn),
 	In : make(chan *Message, CommBufferSize), 
 	Out : make(chan *Message, CommBufferSize),
 	disconnect : make(chan int64),
@@ -108,36 +114,43 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	running : true,
 	}
 
-	network.io.WriteString(fmt.Sprintf("USER %s %s %s :%s\n\r", nick, domain, addr, nick))
-	network.io.WriteString("NICK " + nick + "\n\r")
-
-	
+	network.conn.Write([]byte(fmt.Sprintf("USER %s %s %s :%s\n", nick, domain, addr, nick)))
+	network.conn.Write([]byte("NICK " + nick + "\n"))
+		
+	resp, _, err = network.connIn.ReadLine()
+	for err != nil {
+		netErr := err.(net.Error)
+		if !netErr.Temporary() {
+			errSrc = "InitRead"
+			goto Error
+		}
+		resp, _, err = network.connIn.ReadLine()
+	}
 
 	//Check for connection/nick errors - this will consume first line of motd if no error occurs
-	if resp, _, err = network.io.ReadLine(); err == nil && errRegex.Match(resp) {
+	if errRegex.Match(resp) {
 		//Nick already taken, try a ghost kill
-		network.io.WriteString(fmt.Sprintf("PRIVMSG %s :ghost %s %s\n\r", nickserv, nick, pass))
-		if resp, _, err = network.io.ReadLine(); err == nil && 
+		network.conn.Write([]byte(fmt.Sprintf("PRIVMSG %s :ghost %s %s\n\r", nickserv, nick, pass)))
+		if resp, _, err = network.connIn.ReadLine(); err == nil && 
 			bytes.Index(resp, []byte(`killed`)) != -1 {
 			
 			//Looks like it worked, try again
-			network.io.WriteString("NICK " + nick + "\n\r")
+			network.conn.Write([]byte("NICK " + nick + "\n\r"))
 			//Need another check here?
 		} else {
 			err = os.NewError(string(resp))
+			errSrc = "Ghost"
 			goto Error
 		}
-	} else if err != nil {
-		goto Error
 	}
 	
 	//Consume motd
-	for network.io.Reader.Buffered() > 0 {
-		network.io.ReadLine()
+	for network.connIn.Buffered() > 0 {
+		network.connIn.ReadLine()
 	}
 	
 	if pass != "" {
-		network.io.WriteString(fmt.Sprintf("PRIVMSG %s :identify %s\n\r", nickserv, pass))
+		network.conn.Write([]byte(fmt.Sprintf("PRIVMSG %s :identify %s\n\r", nickserv, pass)))
 	}
 	
 	//Might fail here if pass is wrong, but we'll let the user deal
@@ -150,7 +163,7 @@ func dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 	
 Error:
 	//TODO: Log error
-	return nil, err
+	return nil, os.NewError(errSrc + ": " + err.String())
 }
 
 func (self *Network) HangUp() {
@@ -177,7 +190,7 @@ func (self *Network) keepAlive(nick string) {
 
 func (self *Network) listen() {
 	for self.running {
-		msg, _, err := self.io.ReadLine()
+		msg, _, err := self.connIn.ReadLine()
 		if err != nil {
 			//TODO: Log failure
 			//During disconnection, this could spin, make sure reconnect runs
@@ -192,13 +205,13 @@ func (self *Network) speak() {
 	
 	for self.running {
 		msg := <-self.Out
-		_, err := self.io.Write(msg.Encode())
+		_, err := self.conn.Write(msg.Encode())
 		
 		//If write fails, keep trying
 		for err != nil {
 			//During disconnection, this could spin, make sure reconnect runs
 			runtime.Gosched()
-			_, err = self.io.Write(msg.Encode())		
+			_, err = self.conn.Write(msg.Encode())		
 		}
 		
 	}

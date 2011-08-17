@@ -11,7 +11,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	//"log"
 	"sync"
 	"runtime"
 )
@@ -122,7 +121,11 @@ func (bot *Bot) run()  {
 func (bot *Bot) dispatch(msg *Message) {
 	defer RecoverWithTrace()
 	var reply *Message
-	
+
+	if msg == nil {
+		//TODO: Loggit
+		return
+	}
 
 	if replyFactory, ok :=  bot.Actions[msg.Command]; ok {
 		reply = (replyFactory)(bot, msg)
