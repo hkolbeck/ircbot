@@ -7,3 +7,8 @@ GOFILES=\
 	message.go
 
 include $(GOROOT)/src/Make.pkg
+
+example: 
+	$(GC) example.go
+	$(LD) -o example-bot example.$(O) 
+	rm example.$(O)
