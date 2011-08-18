@@ -234,7 +234,9 @@ func (bot *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string) 
 			target = msg.GetSender()
 			query = msg.Trailing[0:]
 			reply = handler(query, msg)
-		} else if msg.Trailing[0] == bot.Attention { //Message using attention char
+		} else if len(msg.Trailing) > 0 &&
+			msg.Trailing[0] == bot.Attention { //Message using attention char
+			
 			target = msg.Args[0]
 			query = msg.Trailing[1:]
 			reply = handler(query, msg)

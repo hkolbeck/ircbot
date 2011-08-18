@@ -201,7 +201,9 @@ func (self *Network) listen() {
 			continue
 		}
 		fmt.Println("[>] " + string(msg))
-		self.In <- Decode(msg)
+		m := Decode(msg)
+		fmt.Printf("%#v\n", m)
+		self.In <- m
 	}
 }
 

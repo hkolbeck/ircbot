@@ -15,6 +15,7 @@ type Message struct {
 	Command string
 	Args []string
 	Trailing string
+	Ctcp string
 }
 
 func (this *Message) Encode() []byte {
@@ -37,10 +38,21 @@ func (this *Message) Encode() []byte {
 		buf.WriteByte(' ')
 	}
 
+	//Write any ctcp commands
+	if len(this.Ctcp) > 0 {
+		buf.WriteByte('\x01')
+		buf.WriteString(this.Ctcp)
+	}
+
 	//Write trailing, if any
 	if len(this.Trailing) > 0 {
 		buf.WriteByte(':')
 		buf.WriteString(this.Trailing)
+	}
+
+	//And the ctcp terminator
+	if len(this.Ctcp) > 0 {
+		buf.WriteByte('\x01')
 	}
 
 	buf.WriteByte('\n')
@@ -69,8 +81,21 @@ func Decode(raw []byte) (msg *Message) {
 
 	//If message has <trailing> pull it off
 	if msgStart := bytes.IndexByte(raw, ':'); msgStart > -1 {
-		msg.Trailing = string(raw[msgStart + 1:])
+		trailBytes := raw[msgStart + 1:]
 		raw = raw[0:msgStart]
+
+		//Check if the message contains a CTCP command
+		if len(trailBytes) > 0 && trailBytes[0] == '\x01' {
+			//Find the terminating 0x01 
+			trailBytes = trailBytes[1:]
+			ctcpEnd := bytes.IndexByte(trailBytes, ' ')
+			if ctcpEnd < 0 { //Nothing in the ctcp but the command
+				msg.Ctcp = string(trailBytes[ :len(trailBytes) - 1])
+			} else {
+				msg.Ctcp = string(trailBytes[:ctcpEnd])
+				msg.Trailing = string(trailBytes[ctcpEnd:len(trailBytes) - 1])
+			}
+		}
 	}
 
 	args := bytes.Fields(raw)
