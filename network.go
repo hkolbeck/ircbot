@@ -194,14 +194,16 @@ func (self *Network) listen() {
 	for self.running {
 		msg, _, err := self.connIn.ReadLine()
 		if err != nil {
-			fmt.Println("[l] ", err)
 			//TODO: Log failure
 			//During disconnection, this could spin, make sure reconnect runs
 			runtime.Gosched() 
 			continue
 		}
-		fmt.Println("[>] " + string(msg))
 		m := Decode(msg)
+		if m.Command != "PONG" && m.Command != "PING" {
+			fmt.Println("[>] " + string(msg))
+		}
+
 		self.In <- m
 	}
 }
@@ -218,7 +220,10 @@ func (self *Network) speak() {
 			runtime.Gosched()
 			_, err = self.conn.Write(msg.Encode())		
 		}
-		fmt.Println("[<] " + string(msg.Encode()))		
+
+		if msg.Command != "PONG" && msg.Command != "PING" {
+			fmt.Println("[<] " + msg.String())
+		}
 	}
 }
 

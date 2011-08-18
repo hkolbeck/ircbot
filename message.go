@@ -89,6 +89,8 @@ func Decode(raw []byte) (msg *Message) {
 				msg.Ctcp = string(trailBytes[:ctcpEnd])
 				msg.Trailing = string(trailBytes[ctcpEnd + 1:len(trailBytes) - 1])
 			}
+		} else {
+			msg.Trailing = string(trailBytes)
 		}
 	}
 
