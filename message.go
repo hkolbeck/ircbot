@@ -8,8 +8,10 @@ package ircbot
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 )
+
 type Message struct {
 	Prefix string
 	Command string
@@ -38,21 +40,13 @@ func (this *Message) Encode() []byte {
 		buf.WriteByte(' ')
 	}
 
-	//Write any ctcp commands
-	if len(this.Ctcp) > 0 {
-		buf.WriteByte('\x01')
-		buf.WriteString(this.Ctcp)
-	}
-
-	//Write trailing, if any
-	if len(this.Trailing) > 0 {
-		buf.WriteByte(':')
-		buf.WriteString(this.Trailing)
-	}
-
-	//And the ctcp terminator
-	if len(this.Ctcp) > 0 {
-		buf.WriteByte('\x01')
+	//Write any ctcp commands and trailing
+	if len(this.Ctcp) > 0 && len(this.Trailing) > 0 {
+		buf.WriteString(fmt.Sprintf(":\x01%s %s\x01", this.Ctcp, this.Trailing))
+	} else if len(this.Ctcp) == 0 && len(this.Trailing) > 0 {
+		buf.WriteString(":" + this.Trailing)
+	} else if len(this.Ctcp) > 0 && len(this.Trailing) == 0 {
+		buf.WriteString(fmt.Sprintf(":\x01%s\x01", this.Ctcp))
 	}
 
 	buf.WriteByte('\n')
@@ -93,7 +87,7 @@ func Decode(raw []byte) (msg *Message) {
 				msg.Ctcp = string(trailBytes[ :len(trailBytes) - 1])
 			} else {
 				msg.Ctcp = string(trailBytes[:ctcpEnd])
-				msg.Trailing = string(trailBytes[ctcpEnd:len(trailBytes) - 1])
+				msg.Trailing = string(trailBytes[ctcpEnd + 1:len(trailBytes) - 1])
 			}
 		}
 	}

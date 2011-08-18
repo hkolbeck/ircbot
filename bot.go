@@ -90,6 +90,12 @@ func NewBot(nick, pass, domain, server string, port int, ssl bool, prefix byte) 
 	return bot, nil
 }
 
+func (bot *Bot) Send(msg *Message) {
+	if msg != nil {
+		bot.network.Out <- msg
+	}
+}
+
 func (bot *Bot) JoinChannel(channel, pass string) {
 	bot.network.Out <- &Message{
 	Command : "JOIN",
