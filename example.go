@@ -47,8 +47,7 @@ func main() {
 	//private message.  The second will be called for all other messages
 	bot.SetPrivmsgHandler(sayHi, ctcpEcho)
 
-	//Connect to the server on the given port, and join any channels specified
-	//Returns the number of channels joined (which we're ignoring) and an error if any
+	//Attempt to join the given channel, here we're joining an unkeyed channel.
 	bot.JoinChannel("#echo", "")
 
 	//No further work to be done in main, block indefinitely
