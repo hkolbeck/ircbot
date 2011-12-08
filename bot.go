@@ -271,7 +271,7 @@ func (bot *Bot) SetPrivmsgHandler(handler, other func(string, *Message) string) 
 func pong(bot *Bot, msg *Message) *Message {
 	return &Message{
 	Command : "PONG",
-	Args : []string{bot.Nick},
+	Args : []string{msg.Args[0]},
 	}
 }
 
