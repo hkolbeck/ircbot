@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"runtime"
+	"rand"
+	"time"
 )
 
 type Bot struct {
@@ -85,9 +87,78 @@ func NewBot(nick, pass, domain, server string, port int, ssl bool, prefix byte) 
 	network : net,
 	myPrefix : "",
 	}
-
 	go bot.run()
+
+	bot.handshake(net, nick, domain, server, pass)
+	
+	go func() {
+		for net.running {
+			<-net.disconnect
+			<-time.After(ReconnectDelay)
+			newNet, error := Dial(server, port, nick, pass, domain, ssl)
+			if error != nil {
+				fmt.Fprint(os.Stderr, error) //Change me to use logger
+				continue
+			}
+			bot.network = newNet 
+			bot.handshake(net, nick, domain, server, pass)
+		}
+	}()
+
 	return bot, nil
+}
+
+func (this *Bot) handshake(net *Network, nick, domain, addr, pass string) {
+	net.Out <- &Message{
+	Command : "USER",
+	Args : []string{nick, domain, addr},
+	Trailing : nick,
+	}
+
+	net.Out <- &Message{
+	Command : "NICK",
+	Args : []string{nick},
+	}
+
+	
+	badNick, greeting := make(chan int, 1), make(chan int, 1)
+	//Listen for nick collision
+	this.Actions["433"] = func(*Bot, *Message) *Message {
+		badNick <- 1
+		return nil
+	}
+
+	//Listen for connection header
+	this.Actions["001"] = func(*Bot, *Message) *Message {
+		greeting <- 1
+		return nil
+	}
+
+NickLoop: for {
+		select {
+		case <-badNick:
+			net.Out <- &Message{
+			Command : "NICK",
+			Args : []string{fmt.Sprintf("goircbot%d", rand.Int())},
+			}		
+		
+		case <-greeting:
+		break NickLoop
+		}
+	}
+
+	this.Actions["433"] = doNothing
+	this.Actions["001"] = doNothing
+
+	//Wait for the server to admit we exist..
+
+	if pass != "" {
+		net.Out <- &Message{
+		Command : "PRIVMSG", 
+		Args : []string{nickserv},
+		Trailing : "identify " + pass,
+		}	
+	}
 }
 
 func (bot *Bot) Send(msg *Message) {
