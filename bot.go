@@ -23,6 +23,7 @@ type Bot struct {
 	Attention byte
 	network *Network
 	myPrefix string
+	channels map[string]string
 }
 
 //Return a bot which stays connected and nothing else
@@ -86,6 +87,7 @@ func NewBot(nick, pass, domain, server string, port int, ssl bool, prefix byte) 
 	Actions : actions, 
 	network : net,
 	myPrefix : "",
+	channels : make(map[string]string),
 	}
 	go bot.run()
 
@@ -102,6 +104,12 @@ func NewBot(nick, pass, domain, server string, port int, ssl bool, prefix byte) 
 			}
 			bot.network = newNet 
 			bot.handshake(net, nick, domain, server, pass)
+			for c, p := range bot.channels {
+				bot.network.Out <- &Message{
+				Command : "JOIN",
+				Args : []string{c, p},
+				}
+			}
 		}
 	}()
 
@@ -168,9 +176,18 @@ func (bot *Bot) Send(msg *Message) {
 }
 
 func (bot *Bot) JoinChannel(channel, pass string) {
+	bot.channels[channel] = pass
 	bot.network.Out <- &Message{
 	Command : "JOIN",
 	Args : []string{channel, pass},
+	}
+}
+
+func (bot *Bot) PartChannel(channel string) {
+	bot.channels[channel] = "", false
+	bot.network.Out <- &Message{
+	Command : "PART",
+	Args : []string{channel},
 	}
 }
 

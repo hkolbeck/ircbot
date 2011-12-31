@@ -112,3 +112,22 @@ func (m *Message) GetSender() string {
 
 	return m.Prefix[0:strings.Index(m.Prefix, "!")]
 }
+
+func Paginate(s, delims string, n int) (split []string) {
+	p, q := 0, n
+
+	for q < len(s) {
+		if t := strings.LastIndexAny(s[p:q], delims); t > 0 {
+			q = p + t
+		}
+
+		split = append(split, s[p:q])
+		p, q = q, q + n
+	}
+
+	if p < len(s) {
+		split = append(split, s[p:q])
+	}
+
+	return split
+}
