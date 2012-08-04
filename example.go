@@ -9,7 +9,6 @@ package main
 import (
 	irc "cbeck/ircbot"
 	"fmt"
-	"os"
 )
 
 //Implement a very simple bot which will respond to anyone addressing it and join
@@ -17,18 +16,18 @@ import (
 var bot *irc.Bot
 
 func main() {
-	var err os.Error
-	
+	var err error
+
 	//Create a new bot
 	bot, err = irc.NewBot(
-		"goirc-bot", //The bot's nick
-		"", //The bot's nickserv password (blank for none)
-		"www.github.com",  //The bot's domain
+		"goirc-bot",         //The bot's nick
+		"",                  //The bot's nickserv password (blank for none)
+		"www.github.com",    //The bot's domain
 		"chat.freenode.org", //IRC server to connect to
-		7070, //Remote port to connect on
-		true, //Use ssl?
-		'!', //Char used to address the bot
-	) 
+		7070,                //Remote port to connect on
+		true,                //Use ssl?
+		'!',                 //Char used to address the bot
+	)
 
 	if err != nil {
 		fmt.Println(err)
@@ -61,7 +60,7 @@ func sayHi(cmd string, msg *irc.Message) string {
 	if msg.Ctcp == "VERSION" {
 		return "GoIRC example bot 1.0"
 	}
-	
+
 	return "Hi there, " + msg.GetSender()
 }
 
@@ -82,20 +81,20 @@ func ctcpEcho(cmd string, msg *irc.Message) string {
 		}
 
 		bot.Send(&irc.Message{
-		Command : "PRIVMSG",
-		Args : []string{target},
-		Ctcp : "ACTION",
-		Trailing : msg.Trailing,
+			Command:  "PRIVMSG",
+			Args:     []string{target},
+			Ctcp:     "ACTION",
+			Trailing: msg.Trailing,
 		})
 	}
-	
+
 	return ""
 }
 
 //Function to join any channels the bot is invited to.
 func join(bot *irc.Bot, msg *irc.Message) *irc.Message {
 	return &irc.Message{
-		Command : "JOIN",
-		Args : []string{msg.Trailing},
+		Command: "JOIN",
+		Args:    []string{msg.Trailing},
 	}
 }
