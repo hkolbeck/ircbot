@@ -1,2 +1,0 @@
-To install, run `make` then `make install`.  The second may require admin priviliges depending on the location of the Go source tree.  For an example of use, check example.go.
-
