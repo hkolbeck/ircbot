@@ -16,11 +16,13 @@ import (
 )
 
 const (
-	//Times in nanoseconds
-	ReconnectDelay    = 5e9
-	KeepAliveInterval = 12e9
-	PingTimeout       = 5e9
-	ReadTimeout       = 5e9
+	//Times in Seconds
+	ReconnectDelay    = 5
+	PingTimeout       = 5
+	ReadTimeout       = 10
+	WriteTimeout      = 10
+	ResendDelay       = 5
+	KeepAliveInterval = 12
 
 	CommBufferSize = 16
 	nickserv       = `NickServ`
@@ -55,10 +57,6 @@ func Dial(server string, port int, nick, pass, domain string, ssl bool) (*Networ
 		goto Error
 	}
 
-	if err = tcpConn.SetReadTimeout(ReadTimeout); err != nil {
-		goto Error
-	}
-
 	if ssl {
 		conn = tls.Client(tcpConn, nil) //nil config should work for all cases
 	} else {
@@ -90,7 +88,7 @@ func (self *Network) HangUp() {
 }
 
 func (self *Network) keepAlive(nick string) {
-	tick := time.NewTicker(KeepAliveInterval)
+	tick := time.NewTicker(KeepAliveInterval * time.Second)
 	defer tick.Stop()
 
 	for self.running {
@@ -99,7 +97,7 @@ func (self *Network) keepAlive(nick string) {
 			Command: "PING",
 			Args:    []string{nick},
 		}
-		timeout := time.After(PingTimeout)
+		timeout := time.After(PingTimeout * time.Second)
 		select {
 		case <-timeout:
 			self.disconnect <- 1
@@ -111,6 +109,7 @@ func (self *Network) keepAlive(nick string) {
 
 func (self *Network) listen() {
 	for self.running {
+		self.conn.SetReadDeadline(time.Now().Add(ReadTimeout * time.Second))
 		msg, _, err := self.connIn.ReadLine()
 		if err != nil {
 			//TODO: Log failure
@@ -128,15 +127,15 @@ func (self *Network) listen() {
 }
 
 func (self *Network) speak() {
-
 	for self.running {
 		msg := <-self.Out
+		self.conn.SetWriteDeadline(time.Now().Add(WriteTimeout * time.Second))
 		_, err := self.conn.Write(msg.Encode())
 
 		//If write fails, keep trying
-		for err != nil {
+		for err != nil && self.running {
 			//During disconnection, this could spin, make sure reconnect runs
-			runtime.Gosched()
+			time.Sleep(ResendDelay * time.Second)
 			_, err = self.conn.Write(msg.Encode())
 		}
 
