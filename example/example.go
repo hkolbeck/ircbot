@@ -7,7 +7,7 @@
 package main
 
 import (
-	irc "cbeck/ircbot"
+	irc "ircbot"
 	"fmt"
 )
 
@@ -56,39 +56,34 @@ func main() {
 //Whether the bot is addressed with its attention char, in a private message, or with example-bot:
 //cmd will hold the meaningful part of the message
 //msg holds the raw irc message broken into prefix, command, args, trailing, and possibly a CTCP command
+//For PRIVMSGs, trailing holds the text of the message
 func sayHi(cmd string, msg *irc.Message) string {
-	if msg.Ctcp == "VERSION" {
-		return "GoIRC example bot 1.0"
+	//CTCP Version needs to be handled here, since it will generally be sent in a pm
+	if msg.Ctcp == "VERSION" { 
+		return "GoIRC example bot"
 	}
 
-	return "Hi there, " + msg.GetSender()
+	return fmt.Sprintf("Hi there, %s. You said: %s", msg.GetSender(), msg.Trailing)
 }
 
 //This will be called for any message not directed at the bot
-//Here, we just listen for any CTCP actions and copy them 
+//Here, we just listen for any CTCP actions (usually sent with '/me') and copy them
+//Note: PMs will not have ctcp actions echoed, since this method will not be called
 func ctcpEcho(cmd string, msg *irc.Message) string {
 	//The convenience methods are limited to sending
 	//simple text PRIVMSGs back to the source of the
 	//incoming message.  For more complex behavior,
 	//Send(*Message) can be used.
 	if msg.Ctcp == "ACTION" {
-		var target string
-
-		if msg.Args[0] == bot.Nick {
-			target = msg.GetSender()
-		} else {
-			target = msg.Args[0]
-		}
-
 		bot.Send(&irc.Message{
 			Command:  "PRIVMSG",
-			Args:     []string{target},
+			Args:     msg.Args[:1],
 			Ctcp:     "ACTION",
 			Trailing: msg.Trailing,
 		})
 	}
 
-	return ""
+	return "" //Nothing else will be sent if an empty string is returned 
 }
 
 //Function to join any channels the bot is invited to.
