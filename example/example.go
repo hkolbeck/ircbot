@@ -7,7 +7,7 @@
 package main
 
 import (
-	irc "ircbot"
+	irc "github.com/ckolbeck/ircbot"
 	"fmt"
 )
 
